@@ -3,7 +3,7 @@ File: /vecReuters.py
 Created Date: Thursday November 16th 2023
 Author: Zihan
 -----
-Last Modified: Monday, 20th November 2023 10:44:55 pm
+Last Modified: Tuesday, 21st November 2023 5:51:28 pm
 Modified By: the developer formerly known as Zihan at <wzh4464@gmail.com>
 -----
 HISTORY:
@@ -18,6 +18,7 @@ from datasets import load_dataset, Dataset
 from transformers import BertTokenizer, BertModel
 import numpy as np
 from functools import partial
+import tqdm
 
 
 def vectorize_and_save(examples, tokenizer, model, resultPath) -> None:
@@ -36,13 +37,13 @@ def vectorize_and_save(examples, tokenizer, model, resultPath) -> None:
         A dictionary containing the vectors from the first layer and the last layer.
     """
     import pyarrow  # 用于处理parquet文件
-    
+
     if isinstance(examples['text'], pyarrow.lib.ChunkedArray):
         examples['text'] = examples['text'].to_pylist()  # 或.to_numpy()
 
     if isinstance(examples['new_id'], pyarrow.lib.ChunkedArray):
         examples['new_id'] = examples['new_id'].to_pylist()  # 或.to_numpy()
-        
+
     # 对文本进行向量化
     inputs = tokenizer(
         examples['text'], padding='max_length', truncation=True, return_tensors="pt")
@@ -129,26 +130,47 @@ def showVecMain():
     # print('first_layer[0][0]:', first_layer[0][0])
 
 
-def merge_batches(resultPath, num_batches):
-    merged_first_layer = []
-    merged_last_layer = []
+def merge_batches(resultPath):
+    # for each .npy file in resultPath, load it and concatenate it to merged_first_layer and merged_last_layer
+    # first merge first layer
+    
+    import glob
 
-    print('merging batches...')
+    # 获取所有.npy文件的路径
+    batch_first_layer_paths = glob.glob(f'{resultPath}/*_first_layer.npy')
+    merge_batche_num = 30
 
-    for i in range(num_batches):
-        print(f'merging batch {i}...')
-        batch_first_layer = np.load(f'{resultPath}/batch_{i}_first_layer.npy')
-        batch_last_layer = np.load(f'{resultPath}/batch_{i}_last_layer.npy')
+    # for j in range(len(batch_first_layer_paths)//merge_batche_num):
+    # # 用于保存合并后的结果
+    #     saveBatch(resultPath, batch_first_layer_paths,
+    #           merge_batche_num, j)
 
-        merged_first_layer.append(batch_first_layer)
-        merged_last_layer.append(batch_last_layer)
+    # use tqdm to show progress
+    for j in tqdm.tqdm(range(len(batch_first_layer_paths)//merge_batche_num)):
+        # 用于保存合并后的结果
+        saveBatch(resultPath, batch_first_layer_paths,
+                  merge_batche_num, j)
 
-    merged_first_layer = np.concatenate(merged_first_layer, axis=0)
-    merged_last_layer = np.concatenate(merged_last_layer, axis=0)
+def saveBatch(resultPath, batch_first_layer_paths, merge_batche_num, j):
+    import os
+    merge_batches = []
+    tmp_npy = None
+    for i in batch_first_layer_paths[j*merge_batche_num:(j+1)*merge_batche_num]:
+        tmp_npy = np.concatenate(
+            (tmp_npy, np.load(i)), axis=0) if tmp_npy is not None else np.load(i)
+        # delete the merged batch
+        os.remove(i)
+        merge_batches.append(i)
 
-    return merged_first_layer, merged_last_layer
+    np.savez_compressed(f'{resultPath}/merged_first_layer_{j}.npz', tmp_npy)
+
+    # print out the merged batches list
+    with open(f'{resultPath}/merged_batches_{j}.txt', 'w') as f:
+        for i in merge_batches:
+            f.write(i+'\n')
 
 
 if __name__ == '__main__':
-    genVecMain(batch_size=64)
+    # genVecMain(batch_size=64)
+    merge_batches('/media/zihan/Ventoy/vecReutersResult')
     # showVecMain()
