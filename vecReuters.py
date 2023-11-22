@@ -3,7 +3,7 @@ File: /vecReuters.py
 Created Date: Thursday November 16th 2023
 Author: Zihan
 -----
-Last Modified: Tuesday, 21st November 2023 10:43:09 pm
+Last Modified: Wednesday, 22nd November 2023 3:39:22 pm
 Modified By: the developer formerly known as Zihan at <wzh4464@gmail.com>
 -----
 HISTORY:
@@ -116,7 +116,31 @@ def genVecMain(batch_size=64, resultPath='/media/zihan/Ventoy/vecReutersResult')
     # np.save(f'{resultPath}/merged_first_layer.npy', merged_first_layer)
     # np.save(f'{resultPath}/merged_last_layer.npy', merged_last_layer)
 
+def unionToOne(path):
+    '''read collection all files named *.npz and concat them to one npz in path
+    
+    return True or false
+    '''
+    resultMat = None
+    
+    import os
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith('.npz'):
+                print(file)
+                mat = np.load(os.path.join(root, file))['arr_0']
+                if resultMat is None:
+                    resultMat = mat
+                else:
+                    resultMat = np.concatenate((resultMat, mat), axis=0)
+                    
+    if resultMat is None:
+        return False
+    
+    np.savez_compressed(os.path.join(path, 'result.npz'), resultMat)
+    return True
 
 if __name__ == '__main__':
-    genVecMain(batch_size=96,
-               resultPath='/media/zihan/LinuxBackup/vecReutersResult')
+    # genVecMain(batch_size=96,
+    #            resultPath='/media/zihan/LinuxBackup/vecReutersResult')
+    unionToOne('/media/zihan/LinuxBackup/vecReutersResult')
